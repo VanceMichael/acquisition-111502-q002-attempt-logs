@@ -1,0 +1,19 @@
+{
+  "attempt": 1,
+  "jobs": [
+    {
+      "id": "linux-1",
+      "matrix": "linux",
+      "executedAttempt": 1,
+      "state": "sealed",
+      "logLease": "/leases/linux-1"
+    },
+    {
+      "id": "win-1",
+      "matrix": "windows",
+      "executedAttempt": 1,
+      "state": "failed",
+      "logLease": "/leases/win-1"
+    }
+  ]
+}

@@ -1,0 +1,78 @@
+{
+  "/files/pipeline.json": {
+    "file": "pipeline.json",
+    "mediaType": "application/json"
+  },
+  "/files/attempt1.json": {
+    "file": "attempt1.json",
+    "mediaType": "application/json"
+  },
+  "/files/attempt2.json": {
+    "file": "attempt2.json",
+    "mediaType": "application/json"
+  },
+  "/files/attempt2-open.json": {
+    "file": "attempt2-open.json",
+    "mediaType": "application/json"
+  },
+  "/files/linux.log": {
+    "file": "linux.log",
+    "mediaType": "application/octet-stream"
+  },
+  "/files/win1.log": {
+    "file": "win1.log",
+    "mediaType": "application/octet-stream"
+  },
+  "/files/win2.log": {
+    "file": "win2.log",
+    "mediaType": "application/octet-stream"
+  },
+  "/files/win-open.log": {
+    "file": "win-open.log",
+    "mediaType": "application/octet-stream"
+  },
+  "/deliveries": {
+    "file": "delivery.json",
+    "mediaType": "application/json"
+  },
+  "/pipelines/build-7": {
+    "file": "pipeline.json",
+    "mediaType": "application/json"
+  },
+  "/attempts/1": {
+    "file": "attempt1.json",
+    "mediaType": "application/json"
+  },
+  "/attempts/2": {
+    "file": "attempt2.json",
+    "partialFile": "attempt2-open.json",
+    "mediaType": "application/json"
+  },
+  "/logs/linux-1": {
+    "file": "linux.log"
+  },
+  "/logs/win-1": {
+    "file": "win1.log"
+  },
+  "/logs/win-2": {
+    "file": "win2.log"
+  },
+  "/logs/win-2-open": {
+    "file": "win-open.log"
+  },
+  "/leases/linux-1": {
+    "file": "linux.log",
+    "mediaType": "application/json",
+    "leaseJob": "linux-1"
+  },
+  "/leases/win-1": {
+    "file": "win1.log",
+    "mediaType": "application/json",
+    "leaseJob": "win-1"
+  },
+  "/leases/win-2": {
+    "file": "win2.log",
+    "mediaType": "application/json",
+    "leaseJob": "win-2"
+  }
+}

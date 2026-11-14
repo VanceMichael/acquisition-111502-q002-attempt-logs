@@ -1,0 +1,29 @@
+{
+  "attempt": 2,
+  "jobs": [
+    {
+      "id": "linux-1",
+      "matrix": "linux",
+      "executedAttempt": 1,
+      "inherited": true,
+      "state": "sealed",
+      "logLease": "/leases/linux-1"
+    },
+    {
+      "id": "win-2",
+      "matrix": "windows",
+      "executedAttempt": 2,
+      "state": "sealed",
+      "logLease": "/leases/win-2"
+    }
+  ],
+  "artifacts": [
+    {
+      "name": "release",
+      "producerJobs": [
+        "linux-1",
+        "win-2"
+      ]
+    }
+  ]
+}

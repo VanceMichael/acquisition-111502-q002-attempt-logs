@@ -1,0 +1,43 @@
+{
+  "deliveryId": "delivery-1",
+  "revision": "r1",
+  "roots": [
+    {
+      "href": "/files/pipeline.json"
+    }
+  ],
+  "resources": [
+    {
+      "href": "/files/pipeline.json",
+      "name": "pipeline.json"
+    },
+    {
+      "href": "/files/attempt1.json",
+      "name": "attempt1.json"
+    },
+    {
+      "href": "/files/attempt2.json",
+      "name": "attempt2.json"
+    },
+    {
+      "href": "/files/attempt2-open.json",
+      "name": "attempt2-open.json"
+    },
+    {
+      "href": "/files/linux.log",
+      "name": "linux.log"
+    },
+    {
+      "href": "/files/win1.log",
+      "name": "win1.log"
+    },
+    {
+      "href": "/files/win2.log",
+      "name": "win2.log"
+    },
+    {
+      "href": "/files/win-open.log",
+      "name": "win-open.log"
+    }
+  ]
+}

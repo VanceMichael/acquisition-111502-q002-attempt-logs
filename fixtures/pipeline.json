@@ -1,0 +1,8 @@
+{
+  "pipeline": "build-7",
+  "attempts": [
+    "/attempts/1",
+    "/attempts/2"
+  ],
+  "deliveredAttempt": 2
+}

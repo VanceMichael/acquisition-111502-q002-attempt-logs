@@ -1,0 +1,12 @@
+{
+  "attempt": 2,
+  "jobs": [
+    {
+      "id": "win-2",
+      "matrix": "windows",
+      "executedAttempt": 2,
+      "state": "running",
+      "log": "/logs/win-2-open"
+    }
+  ]
+}

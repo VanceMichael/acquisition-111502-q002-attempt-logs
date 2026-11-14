@@ -1,0 +1,29 @@
+[
+  {
+    "kind": "job-use",
+    "value": {
+      "attempt": 2,
+      "job": "linux-1",
+      "executedAttempt": 1
+    }
+  },
+  {
+    "kind": "job-log",
+    "value": {
+      "job": "win-1",
+      "executedAttempt": 1,
+      "sealed": true
+    }
+  },
+  {
+    "kind": "artifact",
+    "value": {
+      "name": "release",
+      "attempt": 2,
+      "producerJobs": [
+        "linux-1",
+        "win-2"
+      ]
+    }
+  }
+]
