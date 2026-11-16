@@ -4,7 +4,9 @@ export async function retrieve(entry, allowedOrigin, maximumBytes = 16 * 1024 * 
     throw Object.assign(new Error('source_not_allowed'), { status: 403 });
   }
   const response = await fetch(url, { redirect: 'manual', signal: AbortSignal.timeout(5000) });
-  if (!response.ok) throw Object.assign(new Error('source_response_' + response.status), { status: 502 });
+  if (!response.ok) {
+    throw Object.assign(new Error('source_response_' + response.status), { status: 502, sourceStatus: response.status });
+  }
   let length = 0;
   const chunks = [];
   for await (const chunk of response.body) {

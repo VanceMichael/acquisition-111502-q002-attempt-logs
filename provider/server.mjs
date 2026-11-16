@@ -3,10 +3,11 @@ import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import routes from '../fixtures/routes.json' with { type: 'json' };
 
-export function createProvider({ stage = 'complete' } = {}) {
+export function createProvider({ stage = 'complete', expireFirstLease = false } = {}) {
   const requests = [];
   const counters = new Map();
   const issuedLeases = new Map();
+  let currentStage = stage;
   const server = createServer(async (request, response) => {
     const url = new URL(request.url, 'http://localhost');
     requests.push({ method: request.method, path: url.pathname, query: Object.fromEntries(url.searchParams), headers: request.headers });
@@ -22,8 +23,8 @@ export function createProvider({ stage = 'complete' } = {}) {
       response.end(bytes); return;
     }
     const originalRoute = routes[url.pathname];
-    const route = originalRoute ? { ...originalRoute, ...(originalRoute.stages?.[stage] || {}) } : undefined;
-    if (!route || (route.availableAt && route.availableAt !== stage)) {
+    const route = originalRoute ? { ...originalRoute, ...(originalRoute.stages?.[currentStage] || {}) } : undefined;
+    if (!route || (route.availableAt && route.availableAt !== currentStage)) {
       response.writeHead(404); response.end('not_found'); return;
     }
     if (!['GET', 'HEAD'].includes(request.method)) {
@@ -33,7 +34,10 @@ export function createProvider({ stage = 'complete' } = {}) {
     counters.set(url.pathname, count);
     if (route.leaseJob) {
       const path = '/leased/' + route.leaseJob + '/' + count;
-      issuedLeases.set(path, { file: route.file, job: route.leaseJob, used: false });
+      // Simulate a link that expired before it was used: the stable lease
+      // address must be asked again for a fresh, still-unused link.
+      const expired = expireFirstLease && count === 1;
+      issuedLeases.set(path, { file: route.file, job: route.leaseJob, used: expired });
       const bytes = Buffer.from(JSON.stringify({ job: route.leaseJob, href: path }));
       response.writeHead(200, { 'content-type': 'application/json' }); response.end(bytes); return;
     }
@@ -41,7 +45,7 @@ export function createProvider({ stage = 'complete' } = {}) {
       response.writeHead(302, { location: route.redirect }); response.end(); return;
     }
     try {
-      const fixture = stage === 'partial' && route.partialFile ? route.partialFile : route.file;
+      const fixture = currentStage === 'partial' && route.partialFile ? route.partialFile : route.file;
       let bytes = await readFile(new URL('../fixtures/' + fixture, import.meta.url));
       if (route.echoQuery) bytes = Buffer.from(JSON.stringify({ received: Object.fromEntries(url.searchParams), items: [{ id: 'item-selected' }] }));
       if (route.expireAfter && count > route.expireAfter) {
@@ -68,5 +72,5 @@ export function createProvider({ stage = 'complete' } = {}) {
       response.writeHead(500); response.end('provider_file_error');
     }
   });
-  return { server, requests };
+  return { server, requests, setStage(next) { currentStage = next; } };
 }

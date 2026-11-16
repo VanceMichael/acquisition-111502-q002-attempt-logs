@@ -9,9 +9,9 @@ async function listen(server) {
   return `http://127.0.0.1:${server.address().port}`;
 }
 
-export async function harness(stage = 'complete') {
+export async function harness(stage = 'complete', options = {}) {
   const directory = await mkdtemp(join(tmpdir(), 'collection-'));
-  const provider = createProvider({ stage });
+  const provider = createProvider({ stage, ...options });
   const source = await listen(provider.server);
   let service = await createService({ directory, allowedOrigin: source });
   let base = await listen(service.server);
@@ -30,6 +30,7 @@ export async function harness(stage = 'complete') {
       service = await createService({ directory, allowedOrigin: source });
       base = await listen(service.server);
     },
+    setStage(next) { provider.setStage(next); },
     async close() {
       service.server.closeAllConnections(); provider.server.closeAllConnections();
       await Promise.all([new Promise(resolve => service.server.close(resolve)), new Promise(resolve => provider.server.close(resolve))]);

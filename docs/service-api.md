@@ -4,6 +4,17 @@
 
 POST /acquisitions 接受 collectionId、entry 和可选 options，entry 是授权来源完整地址。当前只领取入口的原始内容并登记收件，返回 collectionId 和 receiptIds。自动解释沿用此入口，所有自动取得的依赖也应保留真实原文收件，不用人工造 records 代替自动接入。来源访问只限启动时冻结的 origin，不能访问其他主机或执行交付件。
 
+入口为流水线索引时，响应额外带 interpretation（attempts、records、issues、receiptIds）。解释只读取来源地址，不执行仓库代码、不触发构建。记录按来源身份归档，可再次领取同一入口而不重复记账：
+
+- pipeline：value 含 pipeline、attempts、deliveredAttempt，出处为入口收件。
+- job-use：value 含 attempt、job、executedAttempt、inherited、state、staging。key 为 pipeline+尝试+job；attempt 是列出该任务的尝试，executedAttempt 是真正执行该任务的尝试。沿用任务保持 inherited 与旧 executedAttempt，不改写成新执行。
+- job-log：value 含 job、executedAttempt、sealed、staging、state、text、steps。key 为 pipeline+job+executedAttempt，因此同一视图里沿用的任务不会生成第二份日志。steps 每项含 name、start、end、complete、location，可按字节区间回到原日志。
+- artifact：value 含 name、attempt、producerJobs，以及逐个 producer 的 executedAttempt 与 inherited。制品属于产出它的尝试，producer 可指向更早执行的任务。
+
+日志在 state 为 sealed 或 failed 且正文以 ::sealed:: 结尾时才算封口；否则记录为 staging，并在 issues 中说明 log_not_sealed。同时满足两个条件才算完整。暂存记录在后续领取到封口内容时被取代，但原收件字节仍可读；已封口记录不会被覆盖。领取链接过期或已用会使服务按同一 logLease 重新申请，地址变化不改变内容身份：收件版本以内容摘要决定。
+
+GET /collections/{collectionId}/attempts/{attempt} 返回该尝试列出的任务、其日志实际所属执行代次、步骤边界与制品。GET /collections/{collectionId}/deliveries/{artifactName} 返回交付尝试与每个 producer 的执行代次及历史日志，用于说明最终交付沿用了哪些历史任务。两者均附出处收件，未知尝试或制品返回 404。issues 每项说明原因、范围与（可得时）依据收件；不可用证据不会被静默丢弃。
+
 GET /collections 返回资料集列表，GET /collections/{collectionId} 返回 collectionId、receiptIds、records、issues。结构化 records 的每项包含 kind、key、value、provenance；key 由各来源身份语义决定，不要求特定内部编码。provenance 是含 receiptId 与 location 的数组，location 可采用字节区间、原行列、JSON Pointer 等可复查定位。issues 每项包含 reason、location，至少能说明原因、受影响范围和已有来源依据，不能用静默丢弃表示未知。缺失资料不等于来源明确删除。
 
 POST /collections/{collectionId}/records 可录入人工确认记录，必须附本资料集的真实收件出处。自动接入不能依赖操作者事先写入答案。该接口目前采用同键不可变约定；新增版本、历史记录与当前视图如何协调，应与来源语义相符，不能覆盖已归档原文。来源契约中的值是查询视图契约，不限定解析器、状态机或索引的内部实现。

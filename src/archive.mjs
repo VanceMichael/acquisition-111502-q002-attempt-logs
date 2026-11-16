@@ -95,8 +95,7 @@ export class Archive {
     return readFile(join(this.directory, 'blobs', receipt.sha256));
   }
 
-  async addRecord(collectionId, record) {
-    identifier(collectionId);
+  async provenance(collectionId, record) {
     if (!record || typeof record.kind !== 'string' || typeof record.key !== 'string' || !record.value || typeof record.value !== 'object') {
       throw Object.assign(new Error('invalid_record'), { status: 400 });
     }
@@ -109,6 +108,11 @@ export class Archive {
         throw Object.assign(new Error('provenance_scope'), { status: 400 });
       }
     }
+  }
+
+  async addRecord(collectionId, record) {
+    identifier(collectionId);
+    await this.provenance(collectionId, record);
     return this.serialized(async () => {
       const collection = await this.collection(collectionId);
       const match = collection.records.find(existing => existing.kind === record.kind && existing.key === record.key);
@@ -118,6 +122,61 @@ export class Archive {
       if (!match) collection.records.push(record);
       await this.saveJson(join(this.directory, 'collections', collectionId + '.json'), collection);
       return record;
+    });
+  }
+
+  // Records produced by source interpretation are keyed by source identity.
+  // Anything still staging is provisional and may be replaced by fresher
+  // evidence (an extending log, or the sealed version of it). A sealed record
+  // is never overwritten. Raw bytes stay addressable by receipt either way.
+  async addSourceRecord(collectionId, record) {
+    identifier(collectionId);
+    await this.provenance(collectionId, record);
+    return this.serialized(async () => {
+      const collection = await this.collection(collectionId);
+      const index = collection.records.findIndex(existing => existing.kind === record.kind && existing.key === record.key);
+      if (index < 0) {
+        collection.records.push(record);
+        await this.saveJson(join(this.directory, 'collections', collectionId + '.json'), collection);
+        return { record, state: 'inserted' };
+      }
+      const existing = collection.records[index];
+      if (JSON.stringify(existing) === JSON.stringify(record)) return { record: existing, state: 'unchanged' };
+      if (existing.value.staging === true) {
+        collection.records[index] = record;
+        await this.saveJson(join(this.directory, 'collections', collectionId + '.json'), collection);
+        return { record, state: 'superseded' };
+      }
+      return { record: existing, state: 'conflict' };
+    });
+  }
+
+  async addIssues(collectionId, issues, { replaceLocations = [] } = {}) {
+    identifier(collectionId);
+    const valid = issues.filter(issue => issue && typeof issue.reason === 'string' && issue.reason &&
+      typeof issue.location === 'string' && issue.location);
+    const replace = new Set(replaceLocations);
+    if (valid.length === 0 && replace.size === 0) return [];
+    return this.serialized(async () => {
+      const collection = await this.collection(collectionId);
+      // Evidence re-observed in this run replaces what was previously said
+      // about the same location; unresolved places stay untouched.
+      const retained = collection.issues.filter(issue => !replace.has(issue.location));
+      const seen = new Set(retained.map(issue => JSON.stringify([issue.reason, issue.location, issue.receiptId ?? null])));
+      const added = [];
+      for (const issue of valid) {
+        const identity = JSON.stringify([issue.reason, issue.location, issue.receiptId ?? null]);
+        if (seen.has(identity)) continue;
+        seen.add(identity);
+        retained.push(issue);
+        added.push(issue);
+      }
+      const changed = retained.length !== collection.issues.length || added.length > 0;
+      if (changed) {
+        collection.issues = retained;
+        await this.saveJson(join(this.directory, 'collections', collectionId + '.json'), collection);
+      }
+      return added;
     });
   }
 
