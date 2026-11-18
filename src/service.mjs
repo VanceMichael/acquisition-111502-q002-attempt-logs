@@ -1,6 +1,6 @@
 import { createServer } from 'node:http';
 import { Archive } from './archive.mjs';
-import { retrieve } from './transport.mjs';
+import { acquireEvidence } from './evidence.mjs';
 import { summarize } from './summary.mjs';
 
 export function json(response, status, value) {
@@ -23,6 +23,40 @@ async function requestBody(request) {
   }
 }
 
+function attemptView(collection, attemptNumber) {
+  const number = Number(attemptNumber);
+  if (!Number.isInteger(number) || number < 1) throw Object.assign(new Error('invalid_attempt'), { status: 400 });
+  const uses = collection.records.filter(record => record.kind === 'job-use' && record.value.attempt === number);
+  if (uses.length === 0) throw Object.assign(new Error('attempt_not_found'), { status: 404 });
+  const jobs = uses.map(use => {
+    const execution = collection.records.find(record => record.kind === 'job-log'
+      && record.value.job === use.value.job && record.value.executedAttempt === use.value.executedAttempt);
+    return {
+      job: use.value.job,
+      executedAttempt: use.value.executedAttempt,
+      inherited: use.value.inherited,
+      state: use.value.state,
+      log: execution ? {
+        key: execution.key, sealed: execution.value.sealed, staged: execution.value.staged,
+        sha256: execution.value.sha256, steps: execution.value.steps, provenance: execution.provenance
+      } : null
+    };
+  });
+  const artifacts = collection.records
+    .filter(record => record.kind === 'artifact' && record.value.attempt === number)
+    .map(record => record.value);
+  const delivery = collection.records.find(record => record.kind === 'delivery');
+  return {
+    collectionId: collection.collectionId,
+    attempt: number,
+    jobs,
+    artifacts,
+    delivered: delivery ? delivery.value.attempt === number : false,
+    delivery: delivery && delivery.value.attempt === number ? delivery.value : null,
+    issues: collection.issues.filter(issue => !issue.location || new RegExp(`/attempts/${number}(/|$)`).test(issue.location))
+  };
+}
+
 export async function createService({ directory, allowedOrigin }) {
   const archive = new Archive(directory);
   await archive.initialize();
@@ -33,6 +67,8 @@ export async function createService({ directory, allowedOrigin }) {
       if (request.method === 'GET' && url.pathname === '/collections') return json(response, 200, await archive.list());
       const collection = url.pathname.match(/^\/collections\/([a-zA-Z0-9_.-]+)$/);
       if (collection && request.method === 'GET') return json(response, 200, await archive.collection(collection[1]));
+      const attempt = url.pathname.match(/^\/collections\/([a-zA-Z0-9_.-]+)\/attempts\/(\d+)$/);
+      if (attempt && request.method === 'GET') return json(response, 200, attemptView(await archive.collection(attempt[1]), attempt[2]));
       const records = url.pathname.match(/^\/collections\/([a-zA-Z0-9_.-]+)\/records$/);
       if (records && request.method === 'POST') return json(response, 201, await archive.addRecord(records[1], await requestBody(request)));
       const blob = url.pathname.match(/^\/receipts\/([a-f0-9]{64})\/body$/);
@@ -53,10 +89,9 @@ export async function createService({ directory, allowedOrigin }) {
       if (request.method === 'POST' && url.pathname === '/acquisitions') {
         const body = await requestBody(request);
         if (typeof body.entry !== 'string') throw Object.assign(new Error('missing_entry'), { status: 400 });
-        const result = await retrieve(body.entry, allowedOrigin);
-        const receipt = await archive.receive({ collectionId: body.collectionId, sourceKey: body.entry, revision: result.revision,
-          mediaType: result.mediaType, bytes: result.bytes, summary: summarize(result.bytes, result.mediaType) });
-        return json(response, 201, { collectionId: body.collectionId, receiptIds: [receipt.receiptId] });
+        const result = await acquireEvidence({ entry: body.entry, collectionId: body.collectionId,
+          archive, allowedOrigin, options: body.options || {} });
+        return json(response, 201, { collectionId: body.collectionId, receiptIds: result.receiptIds });
       }
       return json(response, 404, { error: 'not_found' });
     } catch (error) {

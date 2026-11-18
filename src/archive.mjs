@@ -95,30 +95,75 @@ export class Archive {
     return readFile(join(this.directory, 'blobs', receipt.sha256));
   }
 
-  async addRecord(collectionId, record) {
+  /**
+   * Register observed and manually confirmed records. Identity is kind+key.
+   * Manual registration is immutable: a different value under the same key is
+   * a conflict. Automatic acquisition may replace its own previous view (a
+   * staged log becoming sealed, for example) while retaining every earlier
+   * view in recordHistory and every raw payload as its own receipt.
+   */
+  async registerRecords(collectionId, records, issues = [], { replace = false } = {}) {
     identifier(collectionId);
-    if (!record || typeof record.kind !== 'string' || typeof record.key !== 'string' || !record.value || typeof record.value !== 'object') {
-      throw Object.assign(new Error('invalid_record'), { status: 400 });
-    }
-    if (!Array.isArray(record.provenance) || record.provenance.length === 0) {
-      throw Object.assign(new Error('missing_provenance'), { status: 400 });
-    }
-    for (const origin of record.provenance) {
-      const receipt = await this.receipt(origin.receiptId);
-      if (receipt.collectionId !== collectionId || typeof origin.location !== 'string' || !origin.location) {
-        throw Object.assign(new Error('provenance_scope'), { status: 400 });
+    if (!Array.isArray(records) || !Array.isArray(issues)) throw Object.assign(new Error('invalid_record'), { status: 400 });
+    for (const record of records) {
+      if (!record || typeof record.kind !== 'string' || typeof record.key !== 'string' || !record.value || typeof record.value !== 'object') {
+        throw Object.assign(new Error('invalid_record'), { status: 400 });
+      }
+      if (!Array.isArray(record.provenance) || record.provenance.length === 0) {
+        throw Object.assign(new Error('missing_provenance'), { status: 400 });
+      }
+      for (const origin of record.provenance) {
+        const receipt = await this.receipt(origin.receiptId);
+        if (receipt.collectionId !== collectionId || typeof origin.location !== 'string' || !origin.location) {
+          throw Object.assign(new Error('provenance_scope'), { status: 400 });
+        }
       }
     }
     return this.serialized(async () => {
       const collection = await this.collection(collectionId);
-      const match = collection.records.find(existing => existing.kind === record.kind && existing.key === record.key);
-      if (match && JSON.stringify(match) !== JSON.stringify(record)) {
-        throw Object.assign(new Error('record_identity_conflict'), { status: 409 });
+      const automaticKeys = new Set(collection.automaticKeys || []);
+      for (const record of records) {
+        const identity = record.kind + '\u0000' + record.key;
+        const index = collection.records.findIndex(existing => existing.kind === record.kind && existing.key === record.key);
+        if (index !== -1) {
+          const existing = collection.records[index];
+          if (JSON.stringify(existing) === JSON.stringify(record)) continue;
+          // Only a record that automatic acquisition itself produced may be
+          // revised; a manually confirmed record stays immutable under its key.
+          if (!replace || !automaticKeys.has(identity)) {
+            throw Object.assign(new Error('record_identity_conflict'), { status: 409 });
+          }
+          if (!Array.isArray(collection.recordHistory)) collection.recordHistory = [];
+          collection.recordHistory.push({ kind: existing.kind, key: existing.key, value: existing.value,
+            provenance: existing.provenance, replacedBy: { value: record.value, provenance: record.provenance } });
+          collection.records[index] = record;
+          continue;
+        }
+        collection.records.push(record);
+        if (replace) automaticKeys.add(identity);
       }
-      if (!match) collection.records.push(record);
+      if (replace) collection.automaticKeys = [...automaticKeys];
+      if (issues.length > 0 || replace) {
+        // Automatic observations are a fresh reading of the source; earlier
+        // automatic issue notes no longer describe the observed state. Raw
+        // payloads remain available as receipts.
+        collection.issues = collection.issues.filter(issue => issue.origin !== 'automatic');
+      }
+      for (const issue of issues) {
+        if (!issue || typeof issue.reason !== 'string' || typeof issue.location !== 'string') {
+          throw Object.assign(new Error('invalid_issue'), { status: 400 });
+        }
+        const known = collection.issues.some(existing => existing.reason === issue.reason && existing.location === issue.location);
+        if (!known) collection.issues.push({ ...issue, origin: 'automatic' });
+      }
       await this.saveJson(join(this.directory, 'collections', collectionId + '.json'), collection);
-      return record;
+      return collection;
     });
+  }
+
+  async addRecord(collectionId, record) {
+    await this.registerRecords(collectionId, [record]);
+    return record;
   }
 
   async list() {
